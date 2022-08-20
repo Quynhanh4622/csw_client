@@ -1,47 +1,94 @@
 package com.example.csw_client.controller;
 
+
+
 import com.example.csw_client.model.Employee;
-import com.example.csw_client.service.EmployeeService;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.repository.query.Param;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.RequestBody;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.glassfish.jersey.client.ClientConfig;
+import org.glassfish.jersey.logging.LoggingFeature;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestMethod;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RequestParam;
 
+import javax.ws.rs.client.Client;
+import javax.ws.rs.client.ClientBuilder;
+import javax.ws.rs.client.Entity;
+import javax.ws.rs.client.WebTarget;
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
+import java.io.IOException;
 import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
-@RestController
+@Controller
 public class EmployeeController {
-    @Autowired
-    EmployeeService employeeService;
 
-    @RequestMapping(value = "employee", method = RequestMethod.GET)
-    public ResponseEntity<List<Employee>> findAllUser() {
-        List<Employee> lsEmployee = employeeService.findAll();
-        if (lsEmployee.size() == 0) {
-            return new ResponseEntity(HttpStatus.NO_CONTENT);
+    private final String REST_API_LIST = "http://localhost:8080/employee";
+    private final String REST_API_CREATE = "http://localhost:8080/create";
+    private final String REST_API_DELETE = "http://localhost:8080/delete/";
+    private final String REST_API_UPDATE = "http://localhost:8080/update/";
+    private final String REST_API_GET_ID = "";
+
+    private static Client createJerseyRestClient() {
+        ClientConfig clientConfig = new ClientConfig();
+
+        // Config logging for client side
+        clientConfig.register( //
+                new LoggingFeature( //
+                        Logger.getLogger(LoggingFeature.DEFAULT_LOGGER_NAME), //
+                        Level.INFO, //
+                        LoggingFeature.Verbosity.PAYLOAD_ANY, //
+                        10000));
+
+        return ClientBuilder.newClient(clientConfig);
+    }
+
+    @GetMapping(value = { "/list"})
+    public String index(Model model) {
+        Client client = createJerseyRestClient();
+        WebTarget target = client.target(REST_API_LIST);
+        List<Employee> list =  target.request(MediaType.APPLICATION_JSON_TYPE).get(List.class);
+
+        model.addAttribute("list", list);
+        return "list";
+    }
+
+    @RequestMapping(value = "create")
+    public String create() {
+        return "create";
+    }
+
+    @RequestMapping(value = "save")
+    public String save(@RequestParam String name, @RequestParam String salary) {
+        Employee employee = new Employee();
+        employee.setName(name);
+        employee.setSalary(salary);
+
+        String jsonEmployee = convertToJson(employee);
+        Client client = createJerseyRestClient();
+        WebTarget target = client.target(REST_API_CREATE);
+        Response response = target.request(MediaType.APPLICATION_JSON_TYPE).post(Entity.entity(jsonEmployee, MediaType.APPLICATION_JSON));
+        return "redirect:/";
+    }
+
+    @RequestMapping(value = "delete")
+    public String delete(Integer id) {
+        Client client = createJerseyRestClient();
+        WebTarget target = client.target(REST_API_DELETE + id);
+        Response response = target.request(MediaType.APPLICATION_JSON_TYPE).delete();
+        return "redirect:/";
+    }
+
+    private static String convertToJson(Employee employee) {
+        ObjectMapper mapper = new ObjectMapper();
+        try {
+            return mapper.writeValueAsString(employee);
+        } catch (IOException e) {
+            e.printStackTrace();
         }
-        return new ResponseEntity<List<Employee>>(lsEmployee, HttpStatus.OK);
+        return null;
     }
-
-    @RequestMapping(value = "create", method = RequestMethod.POST)
-    public ResponseEntity<Employee> saveNewUser(@RequestBody Employee employee) {
-        employeeService.saveEmployee(employee);
-        return new ResponseEntity<Employee>(employee, HttpStatus.OK);
-    }
-
-    @RequestMapping(value = "updateUser", method = RequestMethod.PUT)
-    public ResponseEntity<Employee> saveNewEmployee(
-            @Param("id") Integer id,
-            @RequestBody Employee employee) {
-        Employee oldEmployee = employeeService.findById(id);
-        oldEmployee.setName(employee.getName());
-        oldEmployee.setSalary(employee.getSalary());
-        employeeService.saveEmployee(oldEmployee);
-        return new ResponseEntity<Employee>(oldEmployee, HttpStatus.OK);
-    }
-
 }
